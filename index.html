@@ -1,194 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>My Live Player</title>
-
-  <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.16.2/dist/shaka-player.compiled.js"></script>
-
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live Cricket</title>
   <style>
     * {
       box-sizing: border-box;
-    }
-
-    body {
       margin: 0;
-      background: #080b12;
-      color: white;
-      font-family: Arial, sans-serif;
+      padding: 0;
     }
 
-    .container {
-      width: 94%;
-      max-width: 1100px;
-      margin: 40px auto;
-    }
-
-    h1 {
-      margin-bottom: 20px;
-    }
-
-    .input-area {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-
-    input {
-      flex: 1;
-      padding: 14px;
-      border-radius: 8px;
-      border: 1px solid #333;
-      background: #151a24;
-      color: white;
-      outline: none;
-    }
-
-    button {
-      padding: 14px 24px;
-      border: none;
-      border-radius: 8px;
-      background: #2563eb;
-      color: white;
-      cursor: pointer;
-      font-weight: bold;
-    }
-
-    button:hover {
-      background: #1d4ed8;
-    }
-
-    .player {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      background: black;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    video {
+    html, body {
       width: 100%;
       height: 100%;
-      display: block;
+      background: #000;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
 
-    #status {
-      margin-top: 12px;
-      color: #aaa;
+    .player-container {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #000;
+    }
+
+    .loading-spinner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      color: #fff;
+      gap: 12px;
+      font-size: 14px;
+      letter-spacing: 0.5px;
+      z-index: 10;
+      transition: opacity 0.3s ease;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
-
 <body>
 
-<div class="container">
+  <div class="player-container">
+    <div class="loading-spinner" id="loading">
+      <div class="spinner"></div>
+      <span>Loading live stream...</span>
+    </div>
 
-  <h1>My Live Player</h1>
-
-  <div class="input-area">
-
-    <input
-      id="mpdUrl"
-      type="text"
-      placeholder="Paste .mpd URL here"
-    >
-
-    <button onclick="loadStream()">
-      Load
-    </button>
-
+    <iframe
+      id="livePlayer"
+      src="https://allrounder3-0.pages.dev/cricket/sony-3"
+      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+      allowfullscreen
+      scrolling="no">
+    </iframe>
   </div>
 
-  <div class="player">
-    <video
-      id="video"
-      controls
-      autoplay
-      playsinline>
-    </video>
-  </div>
+  <script>
+    const iframe = document.getElementById("livePlayer");
+    const loading = document.getElementById("loading");
 
-  <div id="status">
-    Enter an MPD URL and click Load.
-  </div>
+    // Dynamic stream resolver from query param (?id=hindi etc.)
+    const params = new URLSearchParams(window.location.search);
+    const streamId = params.get("id") || "hindi";
 
-</div>
+    fetch("https://allrounderid2.pages.dev/id.json")
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.iframes)) {
+          const match = data.iframes.find(item => item.id === streamId);
+          if (match && match.iframeSrc && match.iframeSrc !== iframe.src) {
+            iframe.src = match.iframeSrc;
+          }
+        }
+      })
+      .catch(err => {
+        console.warn("Using default stream", err);
+      });
 
-
-<script>
-
-let player;
-
-async function initPlayer() {
-
-  shaka.polyfill.installAll();
-
-  if (!shaka.Player.isBrowserSupported()) {
-
-    document.getElementById("status").textContent =
-      "Your browser does not support this player.";
-
-    return;
-  }
-
-  const video = document.getElementById("video");
-
-  player = new shaka.Player();
-
-  await player.attach(video);
-
-  player.addEventListener("error", function(event) {
-
-    console.error("Shaka Error:", event.detail);
-
-    document.getElementById("status").textContent =
-      "Stream error. Check the MPD URL and CORS permissions.";
-
-  });
-}
-
-
-async function loadStream() {
-
-  const input = document.getElementById("mpdUrl");
-
-  const url = input.value.trim();
-
-  if (!url) {
-
-    alert("Paste an MPD URL first.");
-
-    return;
-  }
-
-  document.getElementById("status").textContent =
-    "Loading live stream...";
-
-  try {
-
-    await player.load(url);
-
-    document.getElementById("status").textContent =
-      "Live stream loaded.";
-
-    document.getElementById("video").play().catch(() => {});
-
-  } catch (error) {
-
-    console.error(error);
-
-    document.getElementById("status").textContent =
-      "Could not load stream. Check the MPD URL, CORS, authentication, or expiration.";
-
-  }
-}
-
-
-initPlayer().catch(console.error);
-
-</script>
+    iframe.addEventListener("load", () => {
+      setTimeout(() => {
+        loading.style.opacity = "0";
+        setTimeout(() => {
+          loading.style.display = "none";
+        }, 300);
+      }, 500);
+    });
+  </script>
 
 </body>
 </html>
