@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Live Cricket</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Live Cricket Player</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shaka-player@4.16.2/dist/controls.css" />
   <style>
     * {
-      box-sizing: border-box;
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
     }
 
     html, body {
@@ -16,108 +18,353 @@
       height: 100%;
       background: #000;
       overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
-    .player-container {
+    #player-wrapper {
       position: fixed;
       inset: 0;
       width: 100vw;
       height: 100vh;
+      background: #000;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #000;
     }
 
-    iframe {
+    .shaka-video-container {
+      width: 100% !important;
+      height: 100% !important;
+      background-color: #000 !important;
+    }
+
+    video {
       width: 100%;
       height: 100%;
-      border: none;
-      display: block;
+      object-fit: contain;
       background: #000;
     }
 
-    .loading-spinner {
-      position: absolute;
-      inset: 0;
+    video.mode-fill {
+      object-fit: fill !important;
+    }
+
+    video.mode-cover {
+      object-fit: cover !important;
+    }
+
+    /* Status Indicator */
+    #status-badge {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top));
+      right: 16px;
+      z-index: 9999;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 14px;
+      background: rgba(10, 12, 18, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+      letter-spacing: 0.5px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+    }
+
+    #status-badge.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #3b82f6;
+    }
+
+    #status-badge.live .status-dot {
+      background: #22c55e;
+      box-shadow: 0 0 10px #22c55e;
+      animation: pulse-dot 1.8s infinite;
+    }
+
+    #status-badge.loading .status-dot {
+      background: #eab308;
+      animation: pulse-dot 1s infinite;
+    }
+
+    #status-badge.error .status-dot {
+      background: #ef4444;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.7); }
+    }
+
+    /* Fit / Aspect Ratio Button */
+    .sp-fit-btn {
+      background: transparent !important;
+      border: none !important;
+      cursor: pointer !important;
+      padding: 0 8px !important;
+      min-width: auto !important;
+      display: flex;
       align-items: center;
       justify-content: center;
-      background: #000;
-      color: #fff;
-      gap: 12px;
-      font-size: 14px;
-      letter-spacing: 0.5px;
-      z-index: 10;
-      transition: opacity 0.3s ease;
+      height: 100%;
+      color: #fff !important;
     }
 
-    .spinner {
-      width: 36px;
-      height: 36px;
-      border: 3px solid rgba(255, 255, 255, 0.15);
-      border-top-color: #3b82f6;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    .fit-pill {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      padding: 3px 7px;
+      border-radius: 4px;
+      line-height: 1;
+      border: 1.5px solid rgba(255, 255, 255, 0.35);
+      color: rgba(255, 255, 255, 0.85);
+      pointer-events: none;
+      white-space: nowrap;
+      transition: border-color 0.2s, color 0.2s;
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
+    .sp-fit-btn:hover .fit-pill {
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+
+    .sp-fit-btn.mode-fill .fit-pill {
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+
+    .sp-fit-btn.mode-cover .fit-pill {
+      border-color: #a78bfa;
+      color: #a78bfa;
+    }
+
+    /* Custom Shaka Controls Styling */
+    .shaka-controls-container button {
+      color: #fff !important;
+    }
+
+    .shaka-seek-bar-container {
+      margin-bottom: 2px;
     }
   </style>
 </head>
 <body>
 
-  <div class="player-container">
-    <div class="loading-spinner" id="loading">
-      <div class="spinner"></div>
-      <span>Loading live stream...</span>
-    </div>
-
-    <iframe
-      id="livePlayer"
-      src="https://allrounder3-0.pages.dev/cricket/sony-3"
-      allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
-      allowfullscreen
-      scrolling="no">
-    </iframe>
+  <!-- Live Status Badge -->
+  <div id="status-badge" class="loading show">
+    <span class="status-dot"></span>
+    <span id="status-text">Loading stream...</span>
   </div>
 
+  <!-- Player Container -->
+  <div id="player-wrapper">
+    <video id="video" autoplay playsinline preload="metadata"></video>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/shaka-player@4.16.2/dist/shaka-player.ui.min.js"></script>
   <script>
-    const iframe = document.getElementById("livePlayer");
-    const loading = document.getElementById("loading");
+    /* ========================================================================
+       STREAM CONFIGURATION:
+       Paste your stream link, DRM keys, or cookie endpoint here.
+       ======================================================================== */
+    const STREAM_CONFIG = {
+      streamUrl: "https://jiotvmblive.cdn.jio.com/bpk-tv/Ten_3_MOB/WDVLive/index.mpd",
+      keyId: "68318f7c97c55ba6ab8d0398a88fed3e",
+      key: "d312fb3325b4eb9462b4a0d2b6794adf",
+      cookieUrl: "https://allrounder2-0.pages.dev/api/Sony-3.json"
+    };
 
-    // Dynamic stream resolver from query param (?id=hindi etc.)
-    const params = new URLSearchParams(window.location.search);
-    const streamId = params.get("id") || "hindi";
+    const video = document.getElementById("video");
+    const container = document.getElementById("player-wrapper");
+    const statusBadge = document.getElementById("status-badge");
+    const statusText = document.getElementById("status-text");
 
-    fetch("https://allrounderid2.pages.dev/id.json")
-      .then(res => res.json())
-      .then(data => {
-        if (data && Array.isArray(data.iframes)) {
-          const match = data.iframes.find(item => item.id === streamId);
-          if (match && match.iframeSrc && match.iframeSrc !== iframe.src) {
-            iframe.src = match.iframeSrc;
-          }
-        }
-      })
-      .catch(err => {
-        console.warn("Using default stream", err);
+    let statusTimer = null;
+
+    function setStatus(text, type, duration = 3500) {
+      if (!statusBadge) return;
+      statusText.textContent = text;
+      statusBadge.className = "show " + type;
+      if (statusTimer) clearTimeout(statusTimer);
+      if (duration > 0) {
+        statusTimer = setTimeout(() => {
+          statusBadge.classList.remove("show");
+        }, duration);
+      }
+    }
+
+    // Aspect Ratio / Fit mode toggler (Contain / Fill / Cover)
+    function injectFitButton(containerEl, videoEl) {
+      const panel = containerEl.querySelector(".shaka-controls-button-panel");
+      if (!panel) return false;
+
+      const anchor = panel.querySelector(".shaka-fullscreen-button");
+      const FITS = ["contain", "fill", "cover"];
+      const FIT_LABELS = { contain: "Fit", fill: "Fill", cover: "Zoom" };
+      let fitIdx = 0;
+
+      const fitBtn = document.createElement("button");
+      fitBtn.className = "sp-fit-btn";
+      fitBtn.title = "Video Fit: " + FIT_LABELS.contain;
+      fitBtn.setAttribute("aria-label", "Cycle Video Fit Mode");
+      fitBtn.innerHTML = '<span class="fit-pill">Fit</span>';
+
+      if (anchor) panel.insertBefore(fitBtn, anchor);
+      else panel.appendChild(fitBtn);
+
+      function applyFit(i) {
+        fitIdx = i;
+        const mode = FITS[i];
+        videoEl.classList.remove("mode-fill", "mode-cover");
+        if (mode === "fill") videoEl.classList.add("mode-fill");
+        if (mode === "cover") videoEl.classList.add("mode-cover");
+        fitBtn.classList.remove("mode-fill", "mode-cover");
+        if (mode !== "contain") fitBtn.classList.add("mode-" + mode);
+        fitBtn.title = "Video Fit: " + FIT_LABELS[mode];
+        const pill = fitBtn.querySelector(".fit-pill");
+        if (pill) pill.textContent = FIT_LABELS[mode];
+      }
+
+      fitBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        applyFit((fitIdx + 1) % FITS.length);
       });
 
-    iframe.addEventListener("load", () => {
-      setTimeout(() => {
-        loading.style.opacity = "0";
-        setTimeout(() => {
-          loading.style.display = "none";
-        }, 300);
-      }, 500);
-    });
-  </script>
+      return true;
+    }
 
+    async function initPlayer() {
+      shaka.polyfill.installAll();
+
+      if (!shaka.Player.isBrowserSupported()) {
+        setStatus("Browser not supported", "error", 0);
+        return;
+      }
+
+      const player = new shaka.Player();
+      await player.attach(video);
+
+      // UI Controls Overlay
+      const ui = new shaka.ui.Overlay(player, container, video);
+      ui.configure({
+        addBigPlayButton: true,
+        controlPanelElements: [
+          "play_pause",
+          "mute",
+          "volume",
+          "time_and_duration",
+          "spacer",
+          "quality",
+          "picture_in_picture",
+          "fullscreen"
+        ],
+        seekBarColors: {
+          base: "rgba(255, 255, 255, 0.2)",
+          buffered: "#f59e0b",
+          played: "#3b82f6"
+        }
+      });
+
+      // Inject Aspect-Ratio Fit Mode Button
+      let retries = 0;
+      const fitInterval = setInterval(() => {
+        if (injectFitButton(container, video) || ++retries > 10) {
+          clearInterval(fitInterval);
+        }
+      }, 200);
+
+      // Configure DRM and Streaming settings
+      const playerConfig = {
+        streaming: {
+          lowLatencyMode: true,
+          bufferingGoal: 10,
+          rebufferingGoal: 2,
+          safeSeekOffset: 5
+        },
+        manifest: {
+          defaultPresentationDelay: 5
+        }
+      };
+
+      if (STREAM_CONFIG.keyId && STREAM_CONFIG.key) {
+        playerConfig.drm = {
+          clearKeys: {
+            [STREAM_CONFIG.keyId]: STREAM_CONFIG.key
+          }
+        };
+      }
+
+      player.configure(playerConfig);
+
+      // Fetch Cookie if configured
+      let cookieValue = "";
+      if (STREAM_CONFIG.cookieUrl) {
+        try {
+          const res = await fetch(STREAM_CONFIG.cookieUrl, { cache: "no-store" });
+          const data = await res.json();
+          cookieValue = data.cookie || "";
+        } catch (e) {
+          console.warn("Could not fetch stream cookie:", e);
+        }
+      }
+
+      if (cookieValue) {
+        player.getNetworkingEngine().registerRequestFilter((type, request) => {
+          request.headers["Referer"] = "https://www.jiotv.com/";
+          request.headers["User-Agent"] = "plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6";
+          request.headers["Cookie"] = cookieValue;
+
+          let urlCookie = cookieValue.startsWith("__hdnea__=") ? cookieValue.slice(10) : cookieValue;
+          if (
+            (type === shaka.net.NetworkingEngine.RequestType.MANIFEST ||
+             type === shaka.net.NetworkingEngine.RequestType.SEGMENT) &&
+            !request.uris[0].includes("__hdnea__")
+          ) {
+            const sep = request.uris[0].includes("?") ? "&" : "?";
+            request.uris[0] += sep + "__hdnea__=" + urlCookie;
+          }
+        });
+      }
+
+      // Load Stream
+      try {
+        setStatus("Connecting to live stream...", "loading", 0);
+        await player.load(STREAM_CONFIG.streamUrl);
+        setStatus("LIVE", "live", 3500);
+        video.play().catch(() => {});
+      } catch (err) {
+        console.error("Stream load error:", err);
+        setStatus("Stream playback error", "error", 5000);
+      }
+
+      // Ensure audio plays when user interacts
+      const unmute = () => { video.muted = false; };
+      container.addEventListener("pointerdown", unmute, { capture: true, once: true });
+      container.addEventListener("click", unmute, { capture: true, once: true });
+
+      player.addEventListener("error", (e) => {
+        console.error("Player error:", e.detail);
+        setStatus("Stream error occurred", "error", 4000);
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", initPlayer);
+  </script>
 </body>
 </html>
